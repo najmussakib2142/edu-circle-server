@@ -32,6 +32,13 @@ async function run() {
 
 
         // assignments api
+
+        app.post('/assignments', async (req, res) => {
+            const newAssignment = req.body;
+            const result = await assignmentsCollection.insertOne(newAssignment)
+            res.send(result)
+        })
+
         app.get('/assignments', async (req, res) => {
             const cursor = assignmentsCollection.find()
             const result = await cursor.toArray();
@@ -44,6 +51,31 @@ async function run() {
             const query = { _id: new ObjectId(id) }
             const result = await assignmentsCollection.findOne(query)
             res.send(result)
+        })
+
+        app.delete('/assignments/:id', async (req, res) => {
+            const assignmentId = req.params.id;
+            const userEmail = req.query.email;
+            const query = { _id: new ObjectId(assignmentId) }
+
+            try {
+                const assignment = await assignmentsCollection.findOne(query)
+
+                if (!assignment) {
+                    return res.status(404).send({ message: 'Assignment not found' })
+                }
+
+                if (assignment.creatorEmail !== userEmail) {
+                    return res.status(403).send({ message: 'Unauthorized delete attempt' })
+                }
+
+                const result = await assignmentsCollection.deleteOne(query)
+                res.send(result)
+            } catch (err) {
+                console.error(err);
+                res.status(500).send({ message: 'Something went wrong' });
+            }
+
         })
 
         // submissions related api
