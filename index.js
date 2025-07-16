@@ -28,6 +28,8 @@ async function run() {
         await client.connect();
 
         const assignmentsCollection = client.db('eduCircle').collection('assignments')
+        const submissionsCollection = client.db('eduCircle').collection('submissions');
+
 
         // assignments api
         app.get('/assignments', async (req, res) => {
@@ -44,6 +46,22 @@ async function run() {
             res.send(result)
         })
 
+        // submissions related api
+        app.get('/submissions', async (req, res) => {
+            const email = req.query.email;
+            const query = {
+                studentEmail: email
+            }
+            const result = await submissionsCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.post('/submissions', async (req, res) => {
+            const submission = req.body;
+            console.log(submission);
+            const result = await submissionsCollection.insertOne(submission)
+            res.send(result)
+        })
 
 
         // Send a ping to confirm a successful connection
