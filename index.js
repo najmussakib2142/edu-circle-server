@@ -53,6 +53,18 @@ async function run() {
             res.send(result)
         })
 
+        app.put('/assignments/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
+            const options = { upsert: true };
+            const updatedData = req.body;
+            const updatedDoc = {
+                $set: updatedData
+            }
+            const result = await assignmentsCollection.updateOne(filter, updatedDoc, options)
+            res.send(result)
+        })
+
         app.delete('/assignments/:id', async (req, res) => {
             const assignmentId = req.params.id;
             const userEmail = req.query.email;
@@ -107,12 +119,10 @@ async function run() {
             try {
                 const existing = await submissionsCollection.findOne({ _id: new ObjectId(id) });
 
-                // 🛑 Check: Don't allow self-marking
                 if (existing?.studentEmail === markedBy) {
                     return res.status(403).send({ message: "You cannot mark your own assignment." });
                 }
 
-                // ✅ Update document
                 const result = await submissionsCollection.updateOne(
                     { _id: new ObjectId(id) },
                     {
