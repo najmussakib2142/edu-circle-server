@@ -79,14 +79,59 @@ async function run() {
         })
 
         // submissions related api
+        // app.get('/submissions', async (req, res) => {
+        //     const email = req.query.email;
+        //     const query = {
+        //         studentEmail: email
+        //     }
+        //     const result = await submissionsCollection.find(query).toArray()
+        //     res.send(result)
+        // })
         app.get('/submissions', async (req, res) => {
-            const email = req.query.email;
-            const query = {
-                studentEmail: email
+            const { email, status } = req.query;
+            const query = {};
+            if (email) {
+                query.studentEmail = email;
+            }
+            if (status) {
+                query.status = status;
             }
             const result = await submissionsCollection.find(query).toArray()
             res.send(result)
         })
+
+        app.patch('/submissions/:id', async (req, res) => {
+            const { id } = req.params;
+            const { obtainedMarks, feedback, markedBy } = req.body;
+
+            try {
+                const existing = await submissionsCollection.findOne({ _id: new ObjectId(id) });
+
+                // 🛑 Check: Don't allow self-marking
+                if (existing?.studentEmail === markedBy) {
+                    return res.status(403).send({ message: "You cannot mark your own assignment." });
+                }
+
+                // ✅ Update document
+                const result = await submissionsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            obtainedMarks,
+                            feedback,
+                            status: "completed",
+                            markedBy,
+                            markedAt: new Date()
+                        }
+                    }
+                );
+
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to update submission", error: error.message });
+            }
+        });
+
 
         app.post('/submissions', async (req, res) => {
             const submission = req.body;
