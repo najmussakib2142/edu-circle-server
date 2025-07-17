@@ -2,6 +2,11 @@ const express = require('express')
 const cors = require('cors')
 const app = express()
 const port = process.env.PORT || 5000;
+
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-admin-service-key.json");
+
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 
@@ -22,6 +27,35 @@ const client = new MongoClient(uri, {
     }
 });
 
+
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
+const verifyFirebaseToken = async (req, res, next) => {
+    // console.log("token", req.headers);
+    const authHeader = req.headers?.authorization;
+    // console.log(authHeader);
+    if (!authHeader || !authHeader.startsWith('Bearer')) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        console.log('decoded token', decoded);
+        req.user = decoded;
+        next();
+    }
+    catch (error) {
+        res.status(401).send({ message: 'unauthorized access' })
+    }
+
+
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -33,7 +67,7 @@ async function run() {
 
         // assignments api
 
-        app.post('/assignments', async (req, res) => {
+        app.post('/assignments', verifyFirebaseToken, async (req, res) => {
             const newAssignment = req.body;
             const result = await assignmentsCollection.insertOne(newAssignment)
             res.send(result)
@@ -55,14 +89,14 @@ async function run() {
         })
 
         // specific assignment
-        app.get('/assignments/:id', async (req, res) => {
+        app.get('/assignments/:id', verifyFirebaseToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await assignmentsCollection.findOne(query)
             res.send(result)
         })
 
-        app.put('/assignments/:id', async (req, res) => {
+        app.put('/assignments/:id',verifyFirebaseToken, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true };
@@ -108,8 +142,14 @@ async function run() {
         //     const result = await submissionsCollection.find(query).toArray()
         //     res.send(result)
         // })
-        app.get('/submissions', async (req, res) => {
+        app.get('/submissions', verifyFirebaseToken, async (req, res) => {
             const { email, status } = req.query;
+
+            // console.log(req.headers);
+            // if (!email || req.user?.email !== email) {
+            //     return res.status(403).send({ message: 'Access denied' });
+            // }
+            // const query = { studentEmail: email };
             const query = {};
             if (email) {
                 query.studentEmail = email;
@@ -152,7 +192,7 @@ async function run() {
         });
 
 
-        app.post('/submissions', async (req, res) => {
+        app.post('/submissions',verifyFirebaseToken, async (req, res) => {
             const submission = req.body;
             console.log(submission);
             const result = await submissionsCollection.insertOne(submission)
