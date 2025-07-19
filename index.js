@@ -1,14 +1,15 @@
+require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const app = express()
 const port = process.env.PORT || 5000;
 
 const admin = require("firebase-admin");
-const serviceAccount = require("./firebase-admin-service-key.json");
+const decoded = Buffer.from(process.env.FB_SERVICE_KRY, 'base64').toString('utf-8')
+const serviceAccount = JSON.parse(decoded);
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-require('dotenv').config()
 
 // middleWare
 app.use(cors());
@@ -33,6 +34,7 @@ admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
 
+
 const verifyFirebaseToken = async (req, res, next) => {
     // console.log("token", req.headers);
     const authHeader = req.headers?.authorization;
@@ -52,14 +54,22 @@ const verifyFirebaseToken = async (req, res, next) => {
     catch (error) {
         res.status(401).send({ message: 'unauthorized access' })
     }
-
-
 }
+
+
+const verifyTokenEmail = (req, res, next) => {
+    if (req.query.email && req.query.email !== req.user?.email) {
+        return res.status(403).send({ message: 'forbidden access' })
+    }
+    next();
+}
+
+
 
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         const assignmentsCollection = client.db('eduCircle').collection('assignments')
         const submissionsCollection = client.db('eduCircle').collection('submissions');
@@ -67,7 +77,7 @@ async function run() {
 
         // assignments api
 
-        app.post('/assignments', verifyFirebaseToken, async (req, res) => {
+        app.post('/assignments', verifyFirebaseToken, verifyTokenEmail, async (req, res) => {
             const newAssignment = req.body;
             const result = await assignmentsCollection.insertOne(newAssignment)
             res.send(result)
@@ -89,14 +99,14 @@ async function run() {
         })
 
         // specific assignment
-        app.get('/assignments/:id', verifyFirebaseToken, async (req, res) => {
+        app.get('/assignments/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await assignmentsCollection.findOne(query)
             res.send(result)
         })
 
-        app.put('/assignments/:id',verifyFirebaseToken, async (req, res) => {
+        app.put('/assignments/:id', verifyFirebaseToken, verifyTokenEmail, async (req, res) => {
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true };
@@ -142,7 +152,7 @@ async function run() {
         //     const result = await submissionsCollection.find(query).toArray()
         //     res.send(result)
         // })
-        app.get('/submissions', verifyFirebaseToken, async (req, res) => {
+        app.get('/submissions', verifyFirebaseToken, verifyTokenEmail, async (req, res) => {
             const { email, status } = req.query;
 
             // console.log(req.headers);
@@ -192,7 +202,7 @@ async function run() {
         });
 
 
-        app.post('/submissions',verifyFirebaseToken, async (req, res) => {
+        app.post('/submissions', verifyFirebaseToken, async (req, res) => {
             const submission = req.body;
             console.log(submission);
             const result = await submissionsCollection.insertOne(submission)
@@ -201,8 +211,8 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
