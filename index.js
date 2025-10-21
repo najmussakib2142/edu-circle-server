@@ -73,6 +73,7 @@ async function run() {
 
         const assignmentsCollection = client.db('eduCircle').collection('assignments')
         const submissionsCollection = client.db('eduCircle').collection('submissions');
+        const reviewsCollection = client.db('eduCircle').collection('reviews');
 
 
         // assignments api
@@ -208,6 +209,76 @@ async function run() {
             const result = await submissionsCollection.insertOne(submission)
             res.send(result)
         })
+
+        app.get('/stats', async (req, res) => {
+            try {
+                // Students: count distinct studentEmail
+                const studentsAgg = await submissionsCollection.aggregate([
+                    { $group: { _id: "$studentEmail" } },
+                    { $count: "totalStudents" }
+                ]).toArray();
+                const totalStudents = studentsAgg[0]?.totalStudents || 0;
+
+                // Instructors: count distinct creatorEmail
+                const instructorsAgg = await assignmentsCollection.aggregate([
+                    { $group: { _id: "$creatorEmail" } },
+                    { $count: "totalInstructors" }
+                ]).toArray();
+                const totalInstructors = instructorsAgg[0]?.totalInstructors || 0;
+
+                // Courses: total assignments
+                const totalCourses = await assignmentsCollection.countDocuments();
+
+                // Partners: if you don't have collection, keep static number
+                const totalPartners = 12;
+
+                res.send({
+                    students: totalStudents,
+                    instructors: totalInstructors,
+                    courses: totalCourses,
+                    partners: totalPartners
+                });
+
+            } catch (err) {
+                console.error(err);
+                res.status(500).send({ message: "Failed to fetch stats" });
+            }
+        });
+
+
+        // Get all reviews
+        app.get('/reviews', async (req, res) => {
+            try {
+                const reviews = await reviewsCollection.find().sort({ createdAt: -1 }).toArray();
+                res.send(reviews);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to fetch reviews", error: error.message });
+            }
+        });
+
+        // Add review (logged-in users only)
+        app.post('/reviews', verifyFirebaseToken, async (req, res) => {
+            const { message, rating } = req.body;
+            if (!message || !rating) {
+                return res.status(400).send({ message: "Message and rating are required" });
+            }
+
+            const newReview = {
+                userEmail: req.user.email,
+                userName: req.user.name || req.user.email.split("@")[0],
+                userPhoto: req.user.picture || null,
+                message,
+                rating,
+                createdAt: new Date(),
+            };
+
+            try {
+                const result = await reviewsCollection.insertOne(newReview);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to save review", error: error.message });
+            }
+        });
 
 
         // Send a ping to confirm a successful connection
