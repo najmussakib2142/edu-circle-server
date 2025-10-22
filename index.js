@@ -47,7 +47,7 @@ const verifyFirebaseToken = async (req, res, next) => {
 
     try {
         const decoded = await admin.auth().verifyIdToken(token);
-        console.log('decoded token', decoded);
+        // console.log('decoded token', decoded);
         req.user = decoded;
         next();
     }
@@ -205,7 +205,7 @@ async function run() {
 
         app.post('/submissions', verifyFirebaseToken, async (req, res) => {
             const submission = req.body;
-            console.log(submission);
+            // console.log(submission);
             const result = await submissionsCollection.insertOne(submission)
             res.send(result)
         })
@@ -279,6 +279,52 @@ async function run() {
                 res.status(500).send({ message: "Failed to save review", error: error.message });
             }
         });
+
+        app.post('/bookmarks', verifyFirebaseToken, async (req, res) => {
+            const { assignmentId } = req.body;
+            if (!assignmentId) return res.status(400).send({ message: "AssignmentId required" });
+
+            const newBookmark = {
+                userEmail: req.user.email,
+                assignmentId,
+                createdAt: new Date()
+            };
+
+            try {
+                const existing = await client.db('eduCircle').collection('bookmarks')
+                    .findOne({ userEmail: req.user.email, assignmentId });
+
+                if (existing) return res.status(400).send({ message: "Already bookmarked" });
+
+                const result = await client.db('eduCircle').collection('bookmarks').insertOne(newBookmark);
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({ message: "Failed to add bookmark", error: err.message });
+            }
+        });
+
+        app.get('/bookmarks', verifyFirebaseToken, async (req, res) => {
+            try {
+                const bookmarks = await client.db('eduCircle').collection('bookmarks')
+                    .find({ userEmail: req.user.email })
+                    .toArray();
+                res.send(bookmarks);
+            } catch (err) {
+                res.status(500).send({ message: "Failed to fetch bookmarks" });
+            }
+        });
+
+        app.delete('/bookmarks/:assignmentId', verifyFirebaseToken, async (req, res) => {
+            const { assignmentId } = req.params;
+            try {
+                const result = await client.db('eduCircle').collection('bookmarks')
+                    .deleteOne({ userEmail: req.user.email, assignmentId });
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({ message: "Failed to remove bookmark" });
+            }
+        });
+
 
 
         // Send a ping to confirm a successful connection
