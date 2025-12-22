@@ -85,19 +85,59 @@ async function run() {
         })
 
         app.get('/assignments', async (req, res) => {
-            const { difficulty, search } = req.query;
+
+            const { page = 1, limit = 10, difficulty, search } = req.query;
+
             const query = {};
+
             if (difficulty) {
                 query.difficulty = difficulty;
             }
+
             if (search) {
                 query.title = { $regex: search, $options: 'i' };
             }
 
-            const cursor = assignmentsCollection.find(query)
-            const result = await cursor.toArray();
-            res.send(result)
-        })
+            const skip = (page - 1) * limit;
+
+            const data = await assignmentsCollection
+                .find(query)
+                .skip(skip)
+                .limit(parseInt(limit))
+                .toArray();
+
+            const total = await assignmentsCollection.countDocuments(query);
+
+            res.send({
+                data,
+                total,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(total / limit)
+            });
+        });
+
+
+        app.get('/assignments/home', async (req, res) => {
+
+            const data = await assignmentsCollection.aggregate([
+                { $sample: { size: 5 } },
+                {
+                    $project: {
+                        title: 1,
+                        thumbnail: 1,
+                        description: 1,
+                        marks: 1,
+                        difficulty: 1,
+                        creatorEmail: 1,
+                        createdAt: 1
+                    }
+                }
+            ]).toArray();
+
+            res.send(data)
+        });
+
 
         // specific assignment
         app.get('/assignments/:id', async (req, res) => {
