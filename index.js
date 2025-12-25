@@ -12,7 +12,25 @@ const serviceAccount = JSON.parse(decoded);
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 // middleWare
-app.use(cors());
+const allowedOrigins = [
+    'http://localhost:5173',
+    process.env.CLIENT_URL_1,
+    // process.env.CLIENT_URL_2
+];
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // allow requests with no origin (like Postman) or if origin is in allowed list
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error(`CORS policy: origin ${origin} not allowed`));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true
+}));
+
 app.use(express.json())
 
 
@@ -136,6 +154,20 @@ async function run() {
             ]).toArray();
 
             res.send(data)
+        });
+
+        // 🔹 Get assignments created by a specific user
+        app.get('/my-assignments', verifyFirebaseToken, verifyTokenEmail, async (req, res) => {
+            const email = req.query.email;
+
+            // Safety check: ensure the email in query matches the verified token email
+            if (req.user.email !== email) {
+                return res.status(403).send({ message: 'Forbidden access' });
+            }
+
+            const query = { creatorEmail: email };
+            const result = await assignmentsCollection.find(query).toArray();
+            res.send(result); // This returns a clean array
         });
 
 
